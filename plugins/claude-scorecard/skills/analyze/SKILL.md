@@ -1,5 +1,5 @@
 ---
-name: claude-scorecard:analyze
+name: claude-scorecard
 description: Analyze your Claude Code session transcripts across 8 effectiveness dimensions and generate an interactive HTML scorecard. Use when the user wants to evaluate their Claude Code usage patterns or generate a skill assessment report.
 allowed-tools: Bash, Write
 ---
