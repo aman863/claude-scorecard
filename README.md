@@ -20,7 +20,7 @@ A Claude Code plugin that analyzes your session transcripts across **8 effective
 ### Step 1 — Add the marketplace
 
 ```shell
-/plugin marketplace add amanjain/claude-scorecard
+/plugin marketplace add aman863/claude-scorecard
 ```
 
 ### Step 2 — Install the plugin
@@ -49,7 +49,7 @@ Claude will scan your `~/.claude/projects/` session files, score your usage acro
 
 ```bash
 # Clone the repo
-git clone https://github.com/amanjain/claude-scorecard
+git clone https://github.com/aman863/claude-scorecard
 cd claude-scorecard
 
 # Test the plugin locally

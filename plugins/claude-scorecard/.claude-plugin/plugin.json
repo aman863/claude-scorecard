@@ -5,7 +5,8 @@
   "author": {
     "name": "Aman Jain"
   },
-  "homepage": "https://github.com/amanjain/claude-scorecard",
+  "homepage": "https://github.com/aman863/claude-scorecard",
+  "repository": "https://github.com/aman863/claude-scorecard",
   "license": "MIT",
   "keywords": ["scorecard", "productivity", "analysis", "metrics"]
 }
