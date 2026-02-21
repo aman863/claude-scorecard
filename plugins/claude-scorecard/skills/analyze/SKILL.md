@@ -1,0 +1,405 @@
+---
+name: claude-scorecard:analyze
+description: Analyze your Claude Code session transcripts across 8 effectiveness dimensions and generate an interactive HTML scorecard. Use when the user wants to evaluate their Claude Code usage patterns or generate a skill assessment report.
+allowed-tools: Bash, Write
+---
+
+# Claude Code Scorecard Generator
+
+You will analyze the user's Claude Code session history and generate a personalized interactive HTML scorecard showing their effectiveness across 8 dimensions.
+
+## Step 1 — Discover Sessions
+
+Run this to find all project session files:
+
+```bash
+find ~/.claude/projects -maxdepth 2 -name "*.jsonl" | grep -v subagents | head -60
+```
+
+Then extract user messages from them:
+
+```bash
+python3 -c "
+import json, glob, os
+files = glob.glob(os.path.expanduser('~/.claude/projects/*/*.jsonl'))
+files = [f for f in files if 'subagents' not in f]
+messages = []
+for f in files:
+    try:
+        with open(f) as fh:
+            for line in fh:
+                d = json.loads(line)
+                if d.get('type') == 'user' and d.get('message',{}).get('role') == 'user':
+                    c = d['message'].get('content','')
+                    if isinstance(c, str) and len(c.strip()) > 15:
+                        messages.append(c[:600])
+    except: pass
+print(f'Total user messages: {len(messages)}')
+print(f'Sessions analyzed: {len(files)}')
+for m in messages[:80]:
+    print('---')
+    print(m[:400])
+" 2>/dev/null
+```
+
+## Step 2 — Score Each Dimension (1–10)
+
+Read through the extracted user messages and score the user on each of these 8 dimensions. Be honest and calibrated — most users score 5–7. Reserve 9–10 for genuinely exceptional behavior.
+
+---
+
+### 1. 🎯 Prompt Clarity
+**What to look for:**
+- Do prompts include specific error codes, user IDs, expected vs actual behavior?
+- Are success criteria defined upfront ("Done when…")?
+- Do feature requests follow a structured format (PRD, plan, spec)?
+- Are constraints stated explicitly?
+
+**Scale anchors:**
+- 1 = Vague one-liners, no context ("fix this", "make it work")
+- 5 = Some context but missing exit criteria or edge cases
+- 10 = Precise specs with constraints, reproduction steps, and exit criteria
+
+---
+
+### 2. ⚡ Iteration Speed
+**What to look for:**
+- Does the user test changes immediately and report back?
+- Do they catch regressions within 1–2 exchanges?
+- Do they use /compact or /clear before context bloats?
+- Do they split failing tasks into smaller chunks quickly?
+
+**Scale anchors:**
+- 1 = Lets errors compound across many exchanges, doesn't report back
+- 5 = Catches issues eventually but takes several rounds
+- 10 = Tests immediately, course-corrects within one exchange
+
+---
+
+### 3. 🏗️ Architecture Thinking
+**What to look for:**
+- Does the user create or maintain CLAUDE.md with engineering preferences?
+- Do they guide folder structure, separation of concerns, data flow?
+- Do they question Claude's architectural proposals?
+- Do they plan verification/testing before implementing?
+
+**Scale anchors:**
+- 1 = Accepts whatever Claude generates, no docs, no preferences
+- 5 = Has some preferences but doesn't encode them; reacts rather than guides
+- 10 = Drives architecture with documented decisions; pre-plans testing strategy
+
+---
+
+### 4. 🔍 Debug Strategy
+**What to look for:**
+- Do they share exact error messages and log output?
+- Do they provide specific user IDs and reproduction steps?
+- Do they isolate variables ("DB is fine, just the API response")?
+- Do they ask "when was the bug introduced"?
+
+**Scale anchors:**
+- 1 = "It's broken", no logs, no reproduction steps
+- 5 = Shares some context but not enough to isolate the issue
+- 10 = Structured repro: Expected / Actual / Logs / Steps / Last working state
+
+---
+
+### 5. 🧠 Human Judgment
+**What to look for:**
+- Do they override risky defaults?
+- Do they question Claude's assumptions and cost estimates?
+- Do they revert bad approaches proactively?
+- Do they make product decisions with stated rationale?
+
+**Scale anchors:**
+- 1 = Rubber-stamps every suggestion, never pushes back
+- 5 = Occasionally questions things but mostly defers
+- 10 = Independently validates, overrides when needed, states reasoning
+
+---
+
+### 6. 📐 Scope Control
+**What to look for:**
+- One session = one focused outcome?
+- Avoids "go through the entire codebase" mega-prompts?
+- Does context ever run out mid-task?
+- Clear separation between investigation and implementation?
+
+**Scale anchors:**
+- 1 = Mega-prompts trying to do everything at once; context regularly runs out
+- 5 = Mostly focused but sometimes combines investigation + implementation
+- 10 = Atomic tasks with clear exit criteria; investigation and implementation are separate sessions
+
+---
+
+### 7. 🧩 Context Management
+**What to look for:**
+- Do they use @ references for specific files?
+- Do they check /context periodically?
+- Do they use /clear and /compact proactively (not reactively)?
+- Do they switch models based on task complexity?
+- Do they start new sessions before context expires?
+
+**Scale anchors:**
+- 1 = Contradictory instructions, stale context, never resets
+- 5 = Uses /clear sometimes but mostly reactive
+- 10 = Proactive resets, precise @ references, strategic model switching
+
+---
+
+### 8. 🛠️ Tool Leverage
+**What to look for:**
+- Is there a detailed CLAUDE.md with engineering preferences?
+- Is plan mode used for complex features?
+- Are reusable process docs created (FEATURE_PROCESS.md, VERIFICATION.md)?
+- Are slash commands, statusline, hooks, or MCP servers used?
+
+**Scale anchors:**
+- 1 = No CLAUDE.md, no slash commands, pure vanilla prompting
+- 5 = Has a basic CLAUDE.md but doesn't use advanced features
+- 10 = Custom skills, hooks, MCP servers, CI loops, process documentation
+
+---
+
+## Step 3 — Compute Summary Stats
+
+After scoring all 8 dimensions, note:
+- **Average score** (sum ÷ 8, one decimal)
+- **Strongest dimension** (highest score)
+- **Focus area** (lowest score)
+- **Session count** (from Step 1)
+- **Project names** (from the ~/.claude/projects/ directory names, cleaned up)
+
+Write one concrete **highest-leverage recommendation** for the user's single biggest gap.
+
+Write a **one-sentence recommendation** for each dimension based on what you observed.
+
+---
+
+## Step 4 — Generate the HTML Scorecard
+
+Write the following HTML to `~/claude-scorecard.html`, replacing every `__PLACEHOLDER__` with the actual computed values:
+
+- `__SESSION_COUNT__` → number of sessions analyzed (e.g. `68`)
+- `__PROJECTS__` → comma-separated project names (e.g. `orbit-ai-backend, FitnessWrapped`)
+- `__DATE__` → today's date as YYYY-MM-DD
+- `__AVG_SCORE__` → average score to one decimal (e.g. `7.3`)
+- `__STRONGEST_EMOJI__` → emoji of strongest dimension
+- `__STRONGEST_LABEL__` → label of strongest dimension
+- `__STRONGEST_VAL__` → score of strongest dimension
+- `__WEAKEST_LABEL__` → label of weakest dimension
+- `__WEAKEST_VAL__` → score of weakest dimension
+- `__LEVERAGE_TEXT__` → your highest-leverage recommendation paragraph
+- `__V_CLARITY__` → score for Prompt Clarity (1–10)
+- `__V_ITERATION__` → score for Iteration Speed (1–10)
+- `__V_ARCHITECTURE__` → score for Architecture (1–10)
+- `__V_DEBUG__` → score for Debug Strategy (1–10)
+- `__V_JUDGMENT__` → score for Human Judgment (1–10)
+- `__V_SCOPE__` → score for Scope Control (1–10)
+- `__V_CONTEXT__` → score for Context Mgmt (1–10)
+- `__V_TOOLS__` → score for Tool Leverage (1–10)
+- `__REC_CLARITY__` → one-sentence recommendation for Prompt Clarity
+- `__REC_ITERATION__` → one-sentence recommendation for Iteration Speed
+- `__REC_ARCHITECTURE__` → one-sentence recommendation for Architecture
+- `__REC_DEBUG__` → one-sentence recommendation for Debug Strategy
+- `__REC_JUDGMENT__` → one-sentence recommendation for Human Judgment
+- `__REC_SCOPE__` → one-sentence recommendation for Scope Control
+- `__REC_CONTEXT__` → one-sentence recommendation for Context Mgmt
+- `__REC_TOOLS__` → one-sentence recommendation for Tool Leverage
+
+HTML TEMPLATE — write this exactly, only substituting the placeholders:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude Code Scorecard</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{--accent:#63dcbe;--accent-rgb:99,220,190;--bg:#0a0f1a;--card:#111827;--card-hover:#151d30;--border:#1e293b;--text:#e2e8f0;--text-dim:#64748b;--text-muted:#475569;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;min-height:100vh;}
+    h1,h2,h3{font-family:'Space Grotesk',sans-serif;}
+    .container{max-width:1140px;margin:0 auto;padding:40px 24px 70px;}
+    .header{text-align:center;margin-bottom:40px;}
+    .header h1{font-size:2rem;font-weight:700;color:var(--accent);letter-spacing:-.5px;margin-bottom:6px;}
+    .header .tagline{font-size:.9rem;color:var(--text-dim);font-style:italic;margin-bottom:14px;}
+    .meta-row{display:flex;justify-content:center;gap:28px;flex-wrap:wrap;}
+    .meta-field{display:flex;align-items:center;gap:8px;}
+    .meta-field .meta-label{font-size:.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;}
+    .meta-field .meta-value{font-size:.9rem;color:var(--text-dim);}
+    .grade-section{display:flex;justify-content:center;margin-bottom:32px;}
+    .grade-badge{width:120px;height:120px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,15,26,.9);border:3px solid var(--accent);box-shadow:0 0 40px rgba(var(--accent-rgb),.25),0 0 80px rgba(var(--accent-rgb),.08);}
+    .grade-badge .avg-big{font-family:'Space Grotesk',sans-serif;font-size:2.8rem;font-weight:700;color:var(--accent);line-height:1;}
+    .grade-badge .avg-label{font-size:.6rem;color:var(--text-muted);letter-spacing:1px;margin-top:2px;text-transform:uppercase;}
+    .pills{display:flex;justify-content:center;gap:14px;flex-wrap:wrap;margin-bottom:36px;}
+    .pill{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:8px 18px;font-size:.85rem;color:var(--text-dim);display:flex;align-items:center;gap:8px;}
+    .pill .pill-val{color:var(--accent);font-weight:600;}
+    .leverage-box{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:18px 22px;margin-bottom:36px;max-width:750px;margin-left:auto;margin-right:auto;}
+    .leverage-box .lev-title{font-family:'Space Grotesk',sans-serif;font-size:.9rem;font-weight:600;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;}
+    .leverage-box .lev-text{font-size:.85rem;color:var(--text-dim);line-height:1.6;}
+    .main-grid{display:grid;grid-template-columns:1fr 1fr;gap:44px;align-items:start;margin-bottom:40px;}
+    @media(max-width:860px){.main-grid{grid-template-columns:1fr;}}
+    .chart-wrap{position:relative;display:flex;justify-content:center;}
+    .chart-box{position:relative;width:100%;max-width:480px;aspect-ratio:1;}
+    canvas{width:100%;height:100%;display:block;}
+    .scores{display:flex;flex-direction:column;gap:12px;}
+    .score-row{padding:12px 16px;background:var(--card);border-radius:8px;border:1px solid var(--border);}
+    .score-top{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+    .score-label{font-size:.85rem;color:var(--text-dim);min-width:140px;flex-shrink:0;display:flex;align-items:center;gap:8px;}
+    .score-label .emoji{font-size:1rem;}
+    .score-bar-track{flex:1;height:6px;border-radius:3px;background:var(--border);position:relative;overflow:hidden;}
+    .score-bar-fill{height:100%;border-radius:3px;background:var(--accent);box-shadow:0 0 8px rgba(var(--accent-rgb),.3);}
+    .score-val{font-size:1.1rem;font-weight:600;color:var(--accent);min-width:40px;text-align:right;}
+    .score-anchors{display:flex;justify-content:space-between;font-size:.65rem;padding:0 2px;}
+    .score-anchors .anchor-lo{color:#6b3a3a;}
+    .score-anchors .anchor-hi{color:#3a6b5e;}
+    .guide-section{grid-column:1/-1;}
+    .guide-header{font-family:'Space Grotesk',sans-serif;font-size:1.15rem;color:var(--accent);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+    .guide-item{border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden;}
+    .guide-item:hover{border-color:rgba(var(--accent-rgb),.2);}
+    .guide-item-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;background:var(--card);user-select:none;}
+    .guide-item-head:hover{background:var(--card-hover);}
+    .guide-item-head .gname{font-size:.9rem;font-weight:500;color:#c0d0e0;}
+    .guide-item-head .garrow{color:var(--text-muted);font-size:.8rem;transition:transform .25s;}
+    .guide-item-head.open .garrow{transform:rotate(180deg);}
+    .guide-body{display:none;padding:16px;background:#0d1220;font-size:.85rem;line-height:1.65;color:var(--text-dim);}
+    .guide-body.open{display:block;}
+    .guide-body .gdesc{margin-bottom:12px;color:#8899aa;}
+    .guide-body .glabel{color:var(--accent);font-weight:600;font-size:.7rem;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;display:block;}
+    .guide-body ul{list-style:none;padding:0;margin-bottom:12px;}
+    .guide-body ul li{padding:4px 0 4px 16px;position:relative;}
+    .guide-body ul li::before{content:'>';position:absolute;left:0;color:var(--accent);font-weight:700;}
+    .guide-body .scale-row{display:flex;justify-content:space-between;padding:6px 0;font-size:.7rem;border-top:1px solid var(--border);margin-top:8px;padding-top:10px;}
+    .guide-body .scale-lo{color:#6b3a3a;}
+    .guide-body .scale-hi{color:#3a6b5e;}
+    .share-section{grid-column:1/-1;margin-top:12px;}
+    .share-bar{display:flex;gap:14px;align-items:center;margin-bottom:14px;flex-wrap:wrap;}
+    .btn{font-family:'JetBrains Mono',monospace;font-size:.85rem;padding:10px 22px;border-radius:6px;border:1px solid var(--accent);background:transparent;color:var(--accent);cursor:pointer;transition:all .25s;font-weight:500;}
+    .btn:hover{background:rgba(var(--accent-rgb),.12);}
+    .btn-solid{background:var(--accent);color:#0a0f1a;font-weight:600;}
+    .btn-solid:hover{opacity:.9;}
+    .copy-ok{font-size:.85rem;color:#63dcbe;opacity:0;transition:opacity .3s;}
+    .copy-ok.show{opacity:1;}
+    .preview-box{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:18px;font-size:.75rem;line-height:1.55;color:#8899aa;white-space:pre;overflow-x:auto;max-height:420px;overflow-y:auto;display:none;}
+    .preview-box.show{display:block;}
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>CLAUDE CODE SCORECARD</h1>
+    <div class="tagline">__SESSION_COUNT__-Session Analysis &middot; __DATE__</div>
+    <div class="meta-row">
+      <div class="meta-field"><span class="meta-label">Projects</span><span class="meta-value">__PROJECTS__</span></div>
+      <div class="meta-field"><span class="meta-label">Sessions</span><span class="meta-value">__SESSION_COUNT__</span></div>
+    </div>
+  </div>
+  <div class="grade-section">
+    <div class="grade-badge">
+      <span class="avg-big">__AVG_SCORE__</span>
+      <span class="avg-label">avg score</span>
+    </div>
+  </div>
+  <div class="pills">
+    <div class="pill">__STRONGEST_EMOJI__ Strongest <span class="pill-val">__STRONGEST_LABEL__ (__STRONGEST_VAL__)</span></div>
+    <div class="pill">📐 Focus Area <span class="pill-val">__WEAKEST_LABEL__ (__WEAKEST_VAL__)</span></div>
+  </div>
+  <div class="leverage-box">
+    <div class="lev-title">Highest-Leverage Change</div>
+    <div class="lev-text">__LEVERAGE_TEXT__</div>
+  </div>
+  <div class="main-grid">
+    <div class="chart-wrap"><div class="chart-box"><canvas id="radar"></canvas></div></div>
+    <div class="scores" id="scores"></div>
+    <div class="guide-section">
+      <div class="guide-header">Scoring Guide</div>
+      <div id="guideItems"></div>
+    </div>
+    <div class="share-section">
+      <div class="share-bar">
+        <button class="btn" onclick="togglePreview()">Preview Scorecard</button>
+        <button class="btn btn-solid" onclick="copyScorecard()">Copy Scorecard</button>
+        <span class="copy-ok" id="copyOk">Copied!</span>
+      </div>
+      <div class="preview-box" id="previewBox"></div>
+    </div>
+  </div>
+</div>
+<script>
+const dims=[
+  {key:'clarity',emoji:'🎯',label:'Prompt Clarity',value:__V_CLARITY__,lo:'Vibes only',hi:'Surgical precision',desc:'How specific, well-structured, and context-rich are the prompts?',indicators:['Defines success criteria upfront','Includes error codes, user IDs, expected behavior','States constraints explicitly','Provides context: what was tried, what failed','Uses structured format for features (PRD, plan, spec)'],scaleAnchors:{lo:'1 — Vague one-liners, no context',hi:'10 — Precise specs with constraints and exit criteria'},rec:'__REC_CLARITY__'},
+  {key:'iteration',emoji:'⚡',label:'Iteration Speed',value:__V_ITERATION__,lo:'Ship and forget',hi:'Tight feedback loops',desc:'How quickly does the user course-correct when something goes wrong?',indicators:['Tests changes immediately after implementation','Catches regressions within 1-2 exchanges','Uses /compact or /clear before context bloats','Splits failing tasks into smaller testable chunks'],scaleAnchors:{lo:'1 — Lets errors stack up silently',hi:'10 — Catches and corrects within one exchange'},rec:'__REC_ITERATION__'},
+  {key:'architecture',emoji:'🏗️',label:'Architecture',value:__V_ARCHITECTURE__,lo:'Yolo structure',hi:'Systems thinker',desc:'Does the user guide high-level design decisions?',indicators:['Creates process docs','Defines engineering preferences in CLAUDE.md','Questions architectural proposals','Plans verification strategy before implementation'],scaleAnchors:{lo:'1 — Accepts whatever Claude generates',hi:'10 — Drives architecture with documented decisions'},rec:'__REC_ARCHITECTURE__'},
+  {key:'debug',emoji:'🔍',label:'Debug Strategy',value:__V_DEBUG__,lo:'"Fix it"',hi:'Root cause hunter',desc:'When things break, does the user share error logs and isolate the issue?',indicators:['Shares exact error messages and log output','Provides specific user IDs and reproduction steps','Isolates variables systematically','Asks "when was the bug introduced"'],scaleAnchors:{lo:'1 — Just says "it\'s broken"',hi:'10 — Provides full repro with isolated variables'},rec:'__REC_DEBUG__'},
+  {key:'judgment',emoji:'🧠',label:'Human Judgment',value:__V_JUDGMENT__,lo:'Auto-accept everything',hi:'Critical thinker',desc:'Does the user exercise independent thinking and override bad recommendations?',indicators:['Overrides risky defaults','Questions Claude\'s assumptions','Reverts bad approaches proactively','Makes product decisions with rationale'],scaleAnchors:{lo:'1 — Rubber-stamps every suggestion',hi:'10 — Independently validates and overrides when needed'},rec:'__REC_JUDGMENT__'},
+  {key:'scope',emoji:'📐',label:'Scope Control',value:__V_SCOPE__,lo:'Kitchen sink prompts',hi:'Laser-focused tasks',desc:'Does the user keep tasks focused and manageable?',indicators:['One session = one focused outcome','Avoids "go through entire codebase" mega-prompts','Context never runs out mid-task','Clear separation between investigation and implementation'],scaleAnchors:{lo:'1 — Mega-prompts that exhaust context',hi:'10 — Atomic tasks with clear exit criteria'},rec:'__REC_SCOPE__'},
+  {key:'context',emoji:'🧩',label:'Context Mgmt',value:__V_CONTEXT__,lo:'Context amnesia',hi:'Surgical context control',desc:'Does the user manage Claude\'s context well?',indicators:['Uses @ references for specific files','Checks /context periodically','Uses /clear and /compact proactively','Switches models based on task complexity'],scaleAnchors:{lo:'1 — Contradictory instructions, stale context',hi:'10 — Proactive resets, precise references'},rec:'__REC_CONTEXT__'},
+  {key:'tools',emoji:'🛠️',label:'Tool Leverage',value:__V_TOOLS__,lo:'Vanilla prompting',hi:'Full toolkit deployed',desc:'Does the user effectively use CLAUDE.md, slash commands, and project setup?',indicators:['Maintains detailed CLAUDE.md','Uses plan mode for complex features','Created reusable process docs','Uses statusline, model switching, hooks'],scaleAnchors:{lo:'1 — No CLAUDE.md, no slash commands',hi:'10 — Custom skills, MCP servers, CI loops'},rec:'__REC_TOOLS__'},
+];
+const ac='#63dcbe',acRgb='99,220,190';
+function computeStats(){const vals=dims.map(d=>d.value);const avg=vals.reduce((a,b)=>a+b,0)/vals.length;const maxI=vals.indexOf(Math.max(...vals));const minI=vals.indexOf(Math.min(...vals));return{avg,strongest:dims[maxI],weakest:dims[minI]};}
+function render(){
+  const s=computeStats();
+  const scoresEl=document.getElementById('scores');
+  scoresEl.innerHTML='';
+  dims.forEach(d=>{
+    const pct=(d.value/10)*100;
+    const row=document.createElement('div');
+    row.className='score-row';
+    row.innerHTML=`<div class="score-top"><span class="score-label"><span class="emoji">${d.emoji}</span> ${d.label}</span><div class="score-bar-track"><div class="score-bar-fill" style="width:${pct}%"></div></div><span class="score-val">${d.value}/10</span></div><div class="score-anchors"><span class="anchor-lo">${d.lo}</span><span class="anchor-hi">${d.hi}</span></div>`;
+    scoresEl.appendChild(row);
+  });
+  const guideEl=document.getElementById('guideItems');
+  guideEl.innerHTML='';
+  dims.forEach(d=>{
+    const item=document.createElement('div');
+    item.className='guide-item';
+    item.innerHTML=`<div class="guide-item-head" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open');"><span class="gname">${d.emoji} ${d.label}</span><span class="garrow">▼</span></div><div class="guide-body"><div class="gdesc">${d.desc}</div><span class="glabel">What to look for</span><ul>${d.indicators.map(x=>'<li>'+x+'</li>').join('')}</ul><div class="scale-row"><span class="scale-lo">${d.scaleAnchors.lo}</span><span class="scale-hi">${d.scaleAnchors.hi}</span></div><div style="margin-top:12px;padding:10px 14px;background:#080e1a;border-radius:6px;border-left:2px solid var(--accent);"><div style="font-size:.7rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;">Recommendation</div><div style="font-size:.82rem;color:#7a8a9a;line-height:1.6;">${d.rec}</div></div></div>`;
+    guideEl.appendChild(item);
+  });
+  drawRadar();
+}
+const canvas=document.getElementById('radar');
+const ctx=canvas.getContext('2d');
+function drawRadar(){
+  const rect=canvas.parentElement.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=rect.width*dpr;canvas.height=rect.height*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const w=rect.width,h=rect.height,cx=w/2,cy=h/2;
+  const maxR=Math.min(cx,cy)*.66,n=dims.length,step=(2*Math.PI)/n,start=-Math.PI/2;
+  ctx.clearRect(0,0,w,h);
+  for(let r=1;r<=10;r++){const rad=(r/10)*maxR;ctx.beginPath();for(let i=0;i<=n;i++){const a=start+(i%n)*step;const x=cx+rad*Math.cos(a),y=cy+rad*Math.sin(a);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.closePath();ctx.strokeStyle=r%5===0?'#1e293b':'#141c2b';ctx.lineWidth=r%5===0?1.2:.4;ctx.stroke();}
+  for(let i=0;i<n;i++){const a=start+i*step;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+maxR*Math.cos(a),cy+maxR*Math.sin(a));ctx.strokeStyle='#1a2535';ctx.lineWidth=.8;ctx.stroke();}
+  ctx.beginPath();
+  for(let i=0;i<=n;i++){const idx=i%n;const a=start+idx*step;const r=(dims[idx].value/10)*maxR;const x=cx+r*Math.cos(a),y=cy+r*Math.sin(a);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
+  ctx.closePath();
+  const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,maxR);grad.addColorStop(0,`rgba(${acRgb},.18)`);grad.addColorStop(1,`rgba(${acRgb},.03)`);ctx.fillStyle=grad;ctx.fill();
+  ctx.strokeStyle=ac;ctx.lineWidth=2.5;ctx.shadowColor=`rgba(${acRgb},.5)`;ctx.shadowBlur=14;ctx.stroke();ctx.shadowBlur=0;
+  for(let i=0;i<n;i++){const a=start+i*step;const r=(dims[i].value/10)*maxR;const x=cx+r*Math.cos(a),y=cy+r*Math.sin(a);ctx.beginPath();ctx.arc(x,y,5,0,2*Math.PI);ctx.fillStyle=ac;ctx.shadowColor=`rgba(${acRgb},.6)`;ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.font='700 13px "JetBrains Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(dims[i].value,x+18*Math.cos(a),y+18*Math.sin(a));const eR=maxR+24;ctx.font='16px sans-serif';ctx.fillText(dims[i].emoji,cx+eR*Math.cos(a),cy+eR*Math.sin(a));const lR=maxR+44;ctx.fillStyle='#4a5568';ctx.font='500 10px "JetBrains Mono",monospace';ctx.textAlign=Math.cos(a)<-.1?'right':Math.cos(a)>.1?'left':'center';ctx.fillText(['Clarity','Iteration','Arch','Debug','Judgment','Scope','Context','Tools'][i],cx+lR*Math.cos(a),cy+lR*Math.sin(a));}
+}
+function buildAscii(){const s=computeStats();const bar=v=>'\u2588'.repeat(Math.round(v*2))+'\u2591'.repeat(20-Math.round(v*2));const lines=['\u250C'+'─'.repeat(46)+'\u2510','\u2502  CLAUDE CODE SCORECARD                       \u2502',`\u2502  __SESSION_COUNT__ Sessions · __DATE__                    \u2502`,'\u251C'+'─'.repeat(46)+'\u2524'];dims.forEach(d=>{const name=`${d.emoji} ${d.label}`.padEnd(22).slice(0,22);lines.push(`\u2502  ${name} ${bar(d.value)} ${String(d.value).padStart(2)}/10 \u2502`);});lines.push('\u251C'+'─'.repeat(46)+'\u2524');lines.push(`\u2502  Average: ${s.avg.toFixed(1)}/10`.padEnd(47).slice(0,47)+'\u2502');lines.push(`\u2502  Strongest: ${(s.strongest.emoji+' '+s.strongest.label+' ('+s.strongest.value+')').padEnd(32).slice(0,32)} \u2502`);lines.push(`\u2502  Focus:     ${(s.weakest.emoji+' '+s.weakest.label+' ('+s.weakest.value+')').padEnd(32).slice(0,32)} \u2502`);lines.push('\u2514'+'─'.repeat(46)+'\u2518');return lines.join('\n');}
+function togglePreview(){const box=document.getElementById('previewBox');box.classList.toggle('show');if(box.classList.contains('show'))box.textContent=buildAscii();}
+function copyScorecard(){navigator.clipboard.writeText(buildAscii()).then(()=>{const ok=document.getElementById('copyOk');ok.classList.add('show');setTimeout(()=>ok.classList.remove('show'),2000);});}
+window.addEventListener('resize',drawRadar);
+render();
+</script>
+</body>
+</html>
+```
+
+## Step 5 — Open the File
+
+After writing the HTML, run:
+
+```bash
+open ~/claude-scorecard.html
+```
+
+Then tell the user:
+- The scorecard has been saved to `~/claude-scorecard.html`
+- Summarize the scores in a compact table in the terminal
+- State the single highest-leverage change they should make

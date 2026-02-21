@@ -1,0 +1,21 @@
+{
+  "name": "claude-scorecard",
+  "owner": {
+    "name": "Aman Jain"
+  },
+  "metadata": {
+    "description": "Analyze your Claude Code session history and generate an interactive HTML scorecard across 8 effectiveness dimensions."
+  },
+  "plugins": [
+    {
+      "name": "claude-scorecard",
+      "source": "./plugins/claude-scorecard",
+      "description": "Analyze your Claude Code sessions across 8 dimensions (Prompt Clarity, Iteration Speed, Architecture, Debug Strategy, Human Judgment, Scope Control, Context Management, Tool Leverage) and generate a beautiful interactive HTML scorecard.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Aman Jain"
+      },
+      "keywords": ["scorecard", "productivity", "analysis", "metrics", "claude-code"]
+    }
+  ]
+}
