@@ -58,7 +58,7 @@ claude --plugin-dir ./plugins/claude-scorecard
 
 Then inside Claude Code:
 ```shell
-/claude-scorecard:analyze
+/claude-scorecard
 ```
 
 ## License
