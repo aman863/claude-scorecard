@@ -32,7 +32,7 @@ A Claude Code plugin that analyzes your session transcripts across **8 effective
 ### Step 3 — Run the scorecard
 
 ```shell
-/claude-scorecard:analyze
+/claude-scorecard
 ```
 
 Claude will scan your `~/.claude/projects/` session files, score your usage across all 8 dimensions, and write an interactive HTML scorecard to `~/claude-scorecard.html`.
